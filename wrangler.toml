@@ -1,0 +1,15 @@
+name = "janken-endless"
+main = "src/index.ts"
+compatibility_date = "2024-12-30"
+
+assets = { directory = "public" }
+
+[durable_objects]
+bindings = [
+  { name = "MATCHMAKER", class_name = "MatchMaker" },
+  { name = "MATCH", class_name = "Match" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["MatchMaker", "Match"]

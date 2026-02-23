@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>じゃんけんえんどれす</title>
+    <meta name="description" content="オンラインでリアルタイムじゃんけん対決！連勝記録を伸ばして友達と共有しよう。" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+
+    <!-- Google AdSense -->
+    <!-- 実際のAdSenseコードに置き換えてください -->
+    <!-- <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script> -->
+</head>
+
+<body>
+    <!-- 広告枠（上部） -->
+    <div class="ad-container ad-top" id="ad-top">
+        <div class="ad-placeholder">
+            <!-- AdSense 広告ユニット -->
+            <!-- <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" data-ad-slot="XXXXXXXXXX" data-ad-format="horizontal" data-full-width-responsive="true"></ins> -->
+            <!-- <script>(adsbygoogle = window.adsbygoogle || []).push({});</script> -->
+            <span class="ad-label">AD</span>
+        </div>
+    </div>
+
+    <!-- メインコンテンツ -->
+    <main class="game-container">
+        <!-- ===== ホーム画面 ===== -->
+        <section id="screen-home" class="screen active">
+            <div class="logo-area">
+                <h1 class="logo-text">✊✌️✋</h1>
+                <h2 class="app-title">じゃんけん<br /><span class="title-accent">えんどれす</span></h2>
+            </div>
+            <div class="streak-display" id="home-streak">
+                <span class="streak-label">🔥 連勝記録</span>
+                <span class="streak-value" id="streak-count">0</span>
+            </div>
+            <button class="btn btn-primary btn-glow" id="btn-join">
+                <span class="btn-icon">⚔️</span>
+                参加する
+            </button>
+        </section>
+
+        <!-- ===== 待機画面 ===== -->
+        <section id="screen-waiting" class="screen">
+            <div class="waiting-animation">
+                <div class="pulse-ring"></div>
+                <div class="pulse-ring delay-1"></div>
+                <div class="pulse-ring delay-2"></div>
+                <div class="waiting-icon">🔍</div>
+            </div>
+            <p class="waiting-text">対戦相手を探しています...</p>
+            <button class="btn btn-secondary" id="btn-cancel">キャンセル</button>
+        </section>
+
+        <!-- ===== 対戦画面（手の選択） ===== -->
+        <section id="screen-selecting" class="screen">
+            <div class="timer-container">
+                <div class="timer-ring" id="timer-ring">
+                    <svg viewBox="0 0 120 120">
+                        <defs>
+                            <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#a78bfa" />
+                                <stop offset="100%" stop-color="#3b82f6" />
+                            </linearGradient>
+                        </defs>
+                        <circle class="timer-bg" cx="60" cy="60" r="54" />
+                        <circle class="timer-progress" id="timer-progress" cx="60" cy="60" r="54" />
+                    </svg>
+                    <span class="timer-text" id="timer-text">10</span>
+                </div>
+            </div>
+            <p class="select-prompt">手を選んでください！</p>
+            <div class="hand-buttons">
+                <button class="hand-btn" data-move="rock" id="btn-rock">
+                    <span class="hand-emoji">✊</span>
+                    <span class="hand-label">グー</span>
+                </button>
+                <button class="hand-btn" data-move="scissors" id="btn-scissors">
+                    <span class="hand-emoji">✌️</span>
+                    <span class="hand-label">チョキ</span>
+                </button>
+                <button class="hand-btn" data-move="paper" id="btn-paper">
+                    <span class="hand-emoji">✋</span>
+                    <span class="hand-label">パー</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ===== ロック画面（選択済み・相手待ち） ===== -->
+        <section id="screen-locked" class="screen">
+            <div class="locked-content">
+                <div class="my-move-display">
+                    <span class="my-move-emoji" id="locked-move-emoji">✊</span>
+                </div>
+                <p class="locked-text">選択済み！</p>
+                <p class="locked-sub">相手の選択を待っています...</p>
+                <div class="loading-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 結果画面 ===== -->
+        <section id="screen-result" class="screen">
+            <div class="result-content">
+                <div class="result-banner" id="result-banner">
+                    <span class="result-text" id="result-text">勝利！</span>
+                </div>
+                <div class="result-hands">
+                    <div class="result-hand my-hand">
+                        <span class="result-hand-label">あなた</span>
+                        <span class="result-hand-emoji" id="result-my-move">✊</span>
+                    </div>
+                    <span class="vs-text">VS</span>
+                    <div class="result-hand opp-hand">
+                        <span class="result-hand-label">相手</span>
+                        <span class="result-hand-emoji" id="result-opp-move">✌️</span>
+                    </div>
+                </div>
+                <div class="result-reason" id="result-reason"></div>
+                <div class="result-streak" id="result-streak">
+                    <span class="streak-label">🔥 連勝</span>
+                    <span class="streak-value" id="result-streak-count">0</span>
+                </div>
+                <div class="result-actions">
+                    <button class="btn btn-primary" id="btn-continue" style="display:none;">続ける</button>
+                    <button class="btn btn-primary" id="btn-rejoin" style="display:none;">もう一度参加</button>
+                    <button class="btn btn-share" id="btn-share" style="display:none;">
+                        <span class="share-icon">𝕏</span> 共有する
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 広告枠（下部） -->
+    <div class="ad-container ad-bottom" id="ad-bottom">
+        <div class="ad-placeholder">
+            <!-- AdSense 広告ユニット -->
+            <!-- <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" data-ad-slot="XXXXXXXXXX" data-ad-format="horizontal" data-full-width-responsive="true"></ins> -->
+            <!-- <script>(adsbygoogle = window.adsbygoogle || []).push({});</script> -->
+            <span class="ad-label">AD</span>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+
+</html>
