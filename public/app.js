@@ -30,6 +30,7 @@
     let deadline = null;
     let streak = loadStreak();
     let pollTimer = null;
+    let pollToken = 0;
     let countdownTimer = null;
     let currentScreen = "home";
 
@@ -128,7 +129,7 @@
         stopCountdown();
 
         const data = await apiPost("/api/join");
-        if (!data) {
+        if (!data || !data.playerId) {
             showScreen("home");
             return;
         }
@@ -148,23 +149,20 @@
 
     // ===== 待機ポーリング =====
     function startWaitPolling() {
-        stopPolling();
-        pollTimer = setInterval(async () => {
-            const data = await apiGet(
-                `/api/wait?playerId=${encodeURIComponent(playerId)}`
-            );
-            if (!data) return;
-
-            if (data.state === "selecting") {
-                stopPolling();
-                matchId = data.matchId;
-                deadline = data.deadline;
-                startSelectingPhase();
-            } else if (data.state === "expired") {
-                stopPolling();
-                showScreen("home");
+        startPolling(
+            `/api/wait?playerId=${encodeURIComponent(playerId)}`,
+            (data) => {
+                if (data.state === "selecting") {
+                    stopPolling();
+                    matchId = data.matchId;
+                    deadline = data.deadline;
+                    startSelectingPhase();
+                } else if (data.state === "expired") {
+                    stopPolling();
+                    showScreen("home");
+                }
             }
-        }, POLL_INTERVAL);
+        );
     }
 
     // ===== 選択フェーズ =====
@@ -264,18 +262,15 @@
 
     // ===== state ポーリング =====
     function startStatePolling() {
-        stopPolling();
-        pollTimer = setInterval(async () => {
-            const data = await apiGet(
-                `/api/state?matchId=${encodeURIComponent(matchId)}&playerId=${encodeURIComponent(playerId)}`
-            );
-            if (!data) return;
-
-            if (data.state === "result") {
-                stopPolling();
-                showResult(data);
+        startPolling(
+            `/api/state?matchId=${encodeURIComponent(matchId)}&playerId=${encodeURIComponent(playerId)}`,
+            (data) => {
+                if (data.state === "result") {
+                    stopPolling();
+                    showResult(data);
+                }
             }
-        }, POLL_INTERVAL);
+        );
     }
 
     async function fetchAndShowResult() {
@@ -387,9 +382,28 @@
     }
 
     // ===== ポーリング管理 =====
+    // 前の応答が返ってから次のリクエストを送る（リクエストを重ねない）。
+    // stopPolling() の後に届いた古い応答は無視する。
+    function startPolling(url, onData) {
+        stopPolling();
+        const token = pollToken;
+
+        async function poll() {
+            const data = await apiGet(url);
+            if (token !== pollToken) return;
+            if (data) onData(data);
+            if (token === pollToken) {
+                pollTimer = setTimeout(poll, POLL_INTERVAL);
+            }
+        }
+
+        pollTimer = setTimeout(poll, POLL_INTERVAL);
+    }
+
     function stopPolling() {
+        pollToken++;
         if (pollTimer) {
-            clearInterval(pollTimer);
+            clearTimeout(pollTimer);
             pollTimer = null;
         }
     }
