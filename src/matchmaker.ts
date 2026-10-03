@@ -9,6 +9,8 @@ interface WaitingPlayer {
 
 export class MatchMaker implements DurableObject {
     private waitingQueue: WaitingPlayer[] = [];
+    // キューから取り出したが、Match DO の初期化が終わっていない待機者
+    private pendingPlayers: Set<string> = new Set();
     private matchedPlayers: Map<string, { matchId: string; deadline: number }> =
         new Map();
 
@@ -46,41 +48,62 @@ export class MatchMaker implements DurableObject {
             (w) => now - w.timestamp < 60_000
         );
 
+        // 古いマッチ情報（deadline から60秒以上）を除去
+        for (const [id, matched] of this.matchedPlayers) {
+            if (now - matched.deadline >= 60_000) {
+                this.matchedPlayers.delete(id);
+            }
+        }
+
         if (this.waitingQueue.length > 0) {
             // マッチング成立
             const opponent = this.waitingQueue.shift()!;
             const matchId = `m_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
-            // Match DOを初期化
-            const matchStub = this.env.MATCH.get(
-                this.env.MATCH.idFromName(matchId)
-            );
+            // Match DO の初期化を await している間も、相手の /wait は割り込んで処理される。
+            // キューにもマッチ済みにもいないと expired と判定されるため、初期化中として保持する
+            this.pendingPlayers.add(opponent.playerId);
 
-            const initResp = await matchStub.fetch(
-                new Request("https://match/init", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        matchId,
-                        playerA: opponent.playerId,
-                        playerB: playerId,
-                    }),
-                    headers: { "Content-Type": "application/json" },
-                })
-            );
+            let deadline: number;
+            try {
+                // Match DOを初期化
+                const matchStub = this.env.MATCH.get(
+                    this.env.MATCH.idFromName(matchId)
+                );
 
-            const initData = (await initResp.json()) as { deadline: number };
+                const initResp = await matchStub.fetch(
+                    new Request("https://match/init", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            matchId,
+                            playerA: opponent.playerId,
+                            playerB: playerId,
+                        }),
+                        headers: { "Content-Type": "application/json" },
+                    })
+                );
+                if (!initResp.ok) {
+                    throw new Error(`Match init failed: ${initResp.status}`);
+                }
+
+                const initData = (await initResp.json()) as { deadline: number };
+                deadline = initData.deadline;
+            } catch (e) {
+                // 初期化に失敗したら、相手を待機キューの先頭に戻す
+                this.waitingQueue.unshift(opponent);
+                return jsonResponse({ error: "Failed to create match" }, 503);
+            } finally {
+                this.pendingPlayers.delete(opponent.playerId);
+            }
 
             // 対戦相手（待機していた側）にもマッチ情報を保存
-            this.matchedPlayers.set(opponent.playerId, {
-                matchId,
-                deadline: initData.deadline,
-            });
+            this.matchedPlayers.set(opponent.playerId, { matchId, deadline });
 
             return jsonResponse({
                 playerId,
                 matchId,
                 state: "selecting",
-                deadline: initData.deadline,
+                deadline,
             });
         } else {
             // 待機キューに追加
@@ -102,9 +125,9 @@ export class MatchMaker implements DurableObject {
         }
 
         // マッチング成立済みか確認
+        // 応答の消失やポーリングの重複に備え、ここでは削除せず何度でも同じ結果を返す
         const matched = this.matchedPlayers.get(playerId);
         if (matched) {
-            this.matchedPlayers.delete(playerId);
             return jsonResponse({
                 state: "selecting",
                 matchId: matched.matchId,
@@ -112,8 +135,10 @@ export class MatchMaker implements DurableObject {
             });
         }
 
-        // まだ待機中か確認
-        const still = this.waitingQueue.some((w) => w.playerId === playerId);
+        // まだ待機中か確認（Match DO の初期化中も待機中として扱う）
+        const still =
+            this.pendingPlayers.has(playerId) ||
+            this.waitingQueue.some((w) => w.playerId === playerId);
         if (still) {
             return jsonResponse({ state: "waiting" });
         }
